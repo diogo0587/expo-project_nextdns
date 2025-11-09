@@ -19,9 +19,10 @@ jobs:
         with:
           node-version: 18
 
-      - name: Setup Expo
+      - name: Setup Expo (install EAS/Expo CLIs and authenticate)
         uses: expo/expo-github-action@v8
         with:
+          expo-version: latest
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
@@ -43,9 +44,10 @@ jobs:
         with:
           node-version: 18
 
-      - name: Setup Expo
+      - name: Setup Expo (install EAS/Expo CLIs and authenticate)
         uses: expo/expo-github-action@v8
         with:
+          expo-version: latest
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
@@ -67,9 +69,10 @@ jobs:
         with:
           node-version: 18
 
-      - name: Setup Expo
+      - name: Setup Expo (install EAS/Expo CLIs and authenticate)
         uses: expo/expo-github-action@v8
         with:
+          expo-version: latest
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
@@ -91,9 +94,10 @@ jobs:
         with:
           node-version: 18
 
-      - name: Setup Expo CLI
+      - name: Setup Expo CLI (authenticate + install expo-cli)
         uses: expo/expo-github-action@v8
         with:
+          expo-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Install deps
