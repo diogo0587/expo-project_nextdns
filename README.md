@@ -107,10 +107,24 @@ EAS perfis estão em `eas.json`:
 
 ## CI/CD (GitHub Actions)
 
-Um workflow já está configurado em `.github/workflows/eas-build.yml`:
-- Dispara builds EAS (Android/iOS) ao dar push no branch `main`.
-- Exporta o build web e faz upload como artefato (`web-dist`).
-- Configure o segredo `EXPO_TOKEN` no repositório (Settings → Secrets and variables → Actions).
+Workflow principal: `.github/workflows/eas-build.yml`
+- Builds EAS (Android/iOS) no push para `main`.
+- Exporta web e **publica automaticamente em GitHub Pages**.
+- Exporta web e **deploy em Vercel**.
+
+Secrets necessários (GitHub → Settings → Secrets and variables → Actions):
+- `EXPO_TOKEN`: token da sua conta Expo (para builds EAS).
+- `VERCEL_TOKEN`: token de acesso do Vercel.
+- `VERCEL_ORG_ID`: ID da organização no Vercel.
+- `VERCEL_PROJECT_ID`: ID do projeto no Vercel.
+
+GitHub Pages:
+- O workflow já inclui `upload-pages-artifact` e `deploy-pages`.
+- Ative Pages em Settings → Pages → Build and deployment: “GitHub Actions”.
+
+Vercel:
+- O job `Deploy to Vercel` baixa o artefato `web-dist` e roda `vercel deploy --cwd dist --prod`.
+- Configure os secrets acima para que o deploy funcione.
 
 ## Notes
 
