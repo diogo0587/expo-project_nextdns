@@ -44,7 +44,7 @@ jobs:
             echo "EAS_PROJECT_ID secret is not set. Please add it to repository secrets.";
             exit 1;
           fi
-          eas init --id ${{ secrets.EAS_PROJECT_ID }} --non-interactive
+          eas init --id ${{ secrets.EAS_PROJECT_ID }} --non-interactive --force
 
       - name: Build Android (APK)
         run: eas build --platform android --profile apk --non-interactive
