@@ -112,6 +112,7 @@ Workflow principal: `.github/workflows/eas-build.yml`
 - Build EAS (Android APK) após o merge.
 - Exporta web e **publica automaticamente em GitHub Pages** após o merge.
 - Exporta web e **deploy em Vercel** após o merge.
+- Faz download do APK gerado e **anexa como artefato** `android-apk` nos Actions.
 
 Secrets necessários (GitHub → Settings → Secrets and variables → Actions):
 - `EXPO_TOKEN`: token da sua conta Expo (para builds EAS).
@@ -120,6 +121,18 @@ Secrets necessários (GitHub → Settings → Secrets and variables → Actions)
 - `VERCEL_TOKEN`: token de acesso do Vercel.
 - `VERCEL_ORG_ID`: ID da organização no Vercel.
 - `VERCEL_PROJECT_ID`: ID do projeto no Vercel.
+- (Opcional) `GH_PAGES_CNAME`: domínio customizado para GitHub Pages (gera `dist/CNAME` automaticamente).
+- (Opcional) `GH_TOKEN`: token pessoal do GitHub (repo scope) para **persistir automaticamente** um keystore gerado no CI como secrets do repositório.
+
+Android signing (CI não-interativo):
+- Se os secrets abaixo estiverem presentes, serão usados:
+  - `ANDROID_KEYSTORE_BASE64`: conteúdo do seu keystore, em Base64.
+  - `ANDROID_KEYSTORE_PASSWORD`: senha do keystore.
+  - `ANDROID_KEY_ALIAS`: alias da chave.
+  - `ANDROID_KEY_PASSWORD`: senha da chave.
+  - Dica: para gerar o Base64 do keystore: `base64 -w 0 release.keystore > keystore.b64`
+- Se NÃO houver secrets, o pipeline **gera automaticamente um keystore efêmero** com `keytool` e usa `credentials.json` local.
+- Se `GH_TOKEN` estiver definido e o keystore foi gerado, o workflow **salva automaticamente** os secrets (`ANDROID_KEYSTORE_*`) no repositório via `gh secret set`, para reutilizar nas próximas execuções.
 
 Política: “Sempre faça merge na main”
 - Proteja o branch `main` em Settings → Branches → Branch protection rules:
