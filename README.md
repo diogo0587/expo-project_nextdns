@@ -115,6 +115,8 @@ Workflow principal: `.github/workflows/eas-build.yml`
 
 Secrets necessários (GitHub → Settings → Secrets and variables → Actions):
 - `EXPO_TOKEN`: token da sua conta Expo (para builds EAS).
+- `EAS_PROJECT_ID`: UUID do projeto no Expo (necessário para `eas init --id` no CI).
+  - Você encontra em expo.dev → seu projeto → Project ID.
 - `VERCEL_TOKEN`: token de acesso do Vercel.
 - `VERCEL_ORG_ID`: ID da organização no Vercel.
 - `VERCEL_PROJECT_ID`: ID do projeto no Vercel.
