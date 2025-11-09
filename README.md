@@ -12,9 +12,12 @@ Built on [Expo Router] with file-based navigation.
 - Delete all logs for a profile (with confirmation)
 - Settings screen to configure:
   - NextDNS API Key
-  - NextDNS Profile ID
+  - Multiple NextDNS Profiles + quick selection
+  - Timezone for queries (IANA)
   - Gemini API Key and model
 - Dark theme support out of the box
+- Stats: Top domains, clients, actions (barras simples)
+- Export CSV dos logs
 
 ## Setup
 
@@ -33,22 +36,22 @@ npx expo start
 3) Configure API keys:
 
 - Open the app and go to the Settings tab.
-- Enter your NextDNS API Key and Profile ID.
+- Enter your NextDNS API Key and Profile(s).
   - Get your key at https://my.nextdns.io/account
 - Optionally, enter your Gemini API Key (for summarization) and model (default: `gemini-1.5-flash-latest`).
   - Get a key at https://aistudio.google.com/app/apikey
 
-Note: Keys are currently stored in memory for simplicity. Persistent storage can be added if needed.
+Keys and settings are securely persisted using Expo SecureStore (Android/iOS). On web, há fallback para localStorage.
 
 ## Tabs
 
 - Home: Default starter page
 - Explore: Starter guidance
-- Logs: Search and view logs; summarize with Gemini
-- Stream: Live updates using NextDNS stream endpoint
-- Download: Retrieve a downloadable URL for logs
-- Delete: Delete all logs from the configured profile
-- Settings: Manage API keys and profile
+- Logs: Search, filtros avançados, estatísticas, export CSV; summarize com Gemini
+- Stream: Live updates usando NextDNS stream endpoint
+- Download: Link para download dos logs
+- Delete: Deletar todos os logs do perfil ativo
+- Settings: Gerenciar chaves, perfis e timezone
 
 ## NextDNS API
 
@@ -66,7 +69,50 @@ This app calls the Google Generative Language API to summarize log data:
 - Endpoint: `POST https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key=...`
 - Default model: `gemini-1.5-flash-latest`
 
+## Build
+
+Web (estático):
+```bash
+npm run export:web
+# publica a pasta dist em qualquer static hosting
+```
+
+Nativo (EAS Build):
+1. Login:
+```bash
+npx expo login
+```
+2. Init EAS:
+```bash
+npm run eas:init
+```
+3. Android (produção):
+```bash
+npm run build:android
+```
+4. iOS (produção):
+```bash
+npm run build:ios
+```
+5. Enviar para lojas:
+```bash
+npm run submit:android
+npm run submit:ios
+```
+
+EAS perfis estão em `eas.json`:
+- development: developmentClient, distribuição interna
+- preview: distribuição interna
+- production: autoIncrement
+
+## CI/CD (GitHub Actions)
+
+Um workflow já está configurado em `.github/workflows/eas-build.yml`:
+- Dispara builds EAS (Android/iOS) ao dar push no branch `main`.
+- Exporta o build web e faz upload como artefato (`web-dist`).
+- Configure o segredo `EXPO_TOKEN` no repositório (Settings → Secrets and variables → Actions).
+
 ## Notes
 
-- The app respects system dark/light mode via Expo/React Navigation theme provider.
-- No extra storage dependencies were added; if you want persistence, we can integrate SecureStore or AsyncStorage.
+- O app respeita o modo escuro/claro do sistema via Expo/React Navigation.
+- CORS no Web: se suas APIs bloquearem requisições do navegador, podemos adicionar um proxy.
