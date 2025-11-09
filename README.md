@@ -41,7 +41,7 @@ npx expo start
 - Optionally, enter your Gemini API Key (for summarization) and model (default: `gemini-1.5-flash-latest`).
   - Get a key at https://aistudio.google.com/app/apikey
 
-Keys and settings are securely persisted using Expo SecureStore (Android/iOS). On web, persistence pode exigir fallback (podemos habilitar se necessário).
+Keys and settings are securely persisted using Expo SecureStore (Android/iOS). On web, há fallback para localStorage.
 
 ## Tabs
 
@@ -104,6 +104,13 @@ EAS perfis estão em `eas.json`:
 - development: developmentClient, distribuição interna
 - preview: distribuição interna
 - production: autoIncrement
+
+## CI/CD (GitHub Actions)
+
+Um workflow já está configurado em `.github/workflows/eas-build.yml`:
+- Dispara builds EAS (Android/iOS) ao dar push no branch `main`.
+- Exporta o build web e faz upload como artefato (`web-dist`).
+- Configure o segredo `EXPO_TOKEN` no repositório (Settings → Secrets and variables → Actions).
 
 ## Notes
 
