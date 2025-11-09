@@ -5,9 +5,11 @@ import { ThemedView } from '@/components/ThemedView';
 import { useApiConfig } from '@/hooks/apiContext';
 import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { useNextDNS } from '@/hooks/useNextDNS';
 
 export default function SettingsScreen() {
   const { config, setConfig, resetConfig } = useApiConfig();
+  const { listProfiles } = useNextDNS();
   const colorScheme = useColorScheme();
   const tint = Colors[colorScheme ?? 'dark'].tint;
 
@@ -35,6 +37,20 @@ export default function SettingsScreen() {
   };
 
   const selectProfile = (id: string) => setConfig({ currentProfileId: id });
+
+  const importProfiles = async () => {
+    try {
+      const profiles = await listProfiles();
+      if (profiles?.length) {
+        setConfig({
+          profiles,
+          currentProfileId: profiles[0].id,
+        });
+      }
+    } catch {
+      // no-op, stay silent
+    }
+  };
 
   return (
     <ThemedView style={{ padding: 16, gap: 12 }}>
@@ -78,9 +94,14 @@ export default function SettingsScreen() {
           style={inputStyle}
         />
       </View>
-      <Pressable onPress={addProfile} style={[styles.button, { borderColor: tint, alignSelf: 'flex-start' }]}>
-        <ThemedText>Add Profile</ThemedText>
-      </Pressable>
+      <View style={styles.row}>
+        <Pressable onPress={addProfile} style={[styles.button, { borderColor: tint }]}>
+          <ThemedText>Add Profile</ThemedText>
+        </Pressable>
+        <Pressable onPress={importProfiles} style={[styles.button, { borderColor: tint }]}>
+          <ThemedText>Import from NextDNS</ThemedText>
+        </Pressable>
+      </View>
 
       <View style={{ gap: 6 }}>
         {config.profiles?.length ? (
@@ -167,5 +188,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     alignItems: 'center',
+    flexWrap: 'wrap',
   },
 });

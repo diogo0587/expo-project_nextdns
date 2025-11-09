@@ -21,6 +21,12 @@
       },
       "autoIncrement": true,
       "credentialsSource": "local"
+    },
+    "apkDebug": {
+      "distribution": "internal",
+      "android": {
+        "gradleCommand": ":app:assembleDebug"
+      }
     }
   },
   "submit": {

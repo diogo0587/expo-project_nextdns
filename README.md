@@ -114,6 +114,11 @@ Workflow principal: `.github/workflows/eas-build.yml`
 - Exporta web e **deploy em Vercel** após o merge.
 - Faz download do APK gerado e **anexa como artefato** `android-apk` nos Actions.
 
+Build Android direto via Gradle (sem EAS): `.github/workflows/android-gradle.yml`
+- Gera o projeto nativo com `expo prebuild` (Android) durante o CI e roda `./gradlew :app:assembleRelease` ou `assembleDebug`.
+- Se secrets de assinatura estiverem presentes, assina `release`; caso contrário, assina com debug para uso interno e produz APK automaticamente.
+- Não requer `android/` commitado — o pipeline gera a pasta nativa a cada execução.
+
 Secrets necessários (GitHub → Settings → Secrets and variables → Actions):
 - `EXPO_TOKEN`: token da sua conta Expo (para builds EAS).
 - `EAS_PROJECT_ID`: UUID do projeto no Expo (necessário para `eas init --id` no CI).
@@ -123,16 +128,21 @@ Secrets necessários (GitHub → Settings → Secrets and variables → Actions)
 - `VERCEL_PROJECT_ID`: ID do projeto no Vercel.
 - (Opcional) `GH_PAGES_CNAME`: domínio customizado para GitHub Pages (gera `dist/CNAME` automaticamente).
 - (Opcional) `GH_TOKEN`: token pessoal do GitHub (repo scope) para **persistir automaticamente** um keystore gerado no CI como secrets do repositório.
+- (Para Gradle release) `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (recomendado: `upload`), `ANDROID_KEY_PASSWORD`.
 
 Android signing (CI não-interativo):
-- Se os secrets abaixo estiverem presentes, serão usados:
-  - `ANDROID_KEYSTORE_BASE64`: conteúdo do seu keystore, em Base64.
-  - `ANDROID_KEYSTORE_PASSWORD`: senha do keystore.
-  - `ANDROID_KEY_ALIAS`: alias da chave.
-  - `ANDROID_KEY_PASSWORD`: senha da chave.
-  - Dica: para gerar o Base64 do keystore: `base64 -w 0 release.keystore > keystore.b64`
-- Se NÃO houver secrets, o pipeline **gera automaticamente um keystore efêmero** com `keytool` e usa `credentials.json` local.
-- Se `GH_TOKEN` estiver definido e o keystore foi gerado, o workflow **salva automaticamente** os secrets (`ANDROID_KEYSTORE_*`) no repositório via `gh secret set`, para reutilizar nas próximas execuções.
+- Com EAS:
+  - Se os secrets abaixo estiverem presentes, serão usados:
+    - `ANDROID_KEYSTORE_BASE64`: conteúdo do seu keystore, em Base64.
+    - `ANDROID_KEYSTORE_PASSWORD`: senha do keystore.
+    - `ANDROID_KEY_ALIAS`: alias da chave (padrão recomendado: `upload`).
+    - `ANDROID_KEY_PASSWORD`: senha da chave.
+    - Dica: para gerar o Base64 do keystore: `base64 -w 0 release.keystore > keystore.b64`
+  - Se NÃO houver secrets, o pipeline **gera automaticamente um keystore efêmero** com `keytool` e usa `credentials.json` local.
+  - Se `GH_TOKEN` estiver definido e o keystore foi gerado, o workflow **salva automaticamente** os secrets (`ANDROID_KEYSTORE_*`) no repositório via `gh secret set`, para reutilizar nas próximas execuções.
+- Com Gradle direto:
+  - Se houver secrets, cria `android/app/keystores/upload.keystore` e injeta `signingConfigs.release` no `build.gradle` via arquivo auxiliar.
+  - Se não houver secrets, assina `release` com a config de debug (uso interno) e produz APK.
 
 Política: “Sempre faça merge na main”
 - Proteja o branch `main` em Settings → Branches → Branch protection rules:
