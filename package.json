@@ -13,6 +13,7 @@
     "build:android:dev": "eas build -p android --profile development",
     "build:ios:dev": "eas build -p ios --profile development",
     "build:android": "eas build -p android --profile production",
+    "build:android:apk": "eas build -p android --profile apk",
     "build:ios": "eas build -p ios --profile production",
     "submit:android": "eas submit -p android --profile production",
     "submit:ios": "eas submit -p ios --profile production",
@@ -45,9 +46,9 @@
     "react-native-screens": "~4.11.1",
     "react-native-web": "~0.20.0",
     "react-native-webview": "13.13.5",
-    "expo-secure-store": "~13.0.3",
-    "expo-file-system": "~17.0.1",
-    "expo-sharing": "~12.0.2"
+    "expo-secure-store": "^15.0.7",
+    "expo-file-system": "^19.0.17",
+    "expo-sharing": "^14.0.7"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
