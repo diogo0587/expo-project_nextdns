@@ -38,22 +38,39 @@ jobs:
       - name: Install deps
         run: npm install
 
-      - name: Set up Android signing credentials (local)
+      - name: Set up Android signing credentials (local, auto-fallback)
         run: |
-          if [ -z "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ] || [ -z "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" ] || [ -z "${{ secrets.ANDROID_KEY_ALIAS }}" ] || [ -z "${{ secrets.ANDROID_KEY_PASSWORD }}" ]; then
-            echo "Android signing secrets are missing. Please set ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD.";
-            exit 1;
-          fi
           mkdir -p android/keystores
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/keystores/release.keystore
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ] && [ -n "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" ] && [ -n "${{ secrets.ANDROID_KEY_ALIAS }}" ] && [ -n "${{ secrets.ANDROID_KEY_PASSWORD }}" ]; then
+            echo "Using provided Android signing secrets.";
+            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/keystores/release.keystore
+            STORE_PASS="${{ secrets.ANDROID_KEYSTORE_PASSWORD }}"
+            KEY_ALIAS="${{ secrets.ANDROID_KEY_ALIAS }}"
+            KEY_PASS="${{ secrets.ANDROID_KEY_PASSWORD }}"
+          else
+            echo "Android signing secrets not found. Generating ephemeral keystore...";
+            if ! command -v keytool >/dev/null 2>&1; then
+              sudo apt-get update
+              sudo apt-get install -y openjdk-17-jdk
+            fi
+            STORE_PASS="$(openssl rand -hex 16)"
+            KEY_PASS="$(openssl rand -hex 16)"
+            KEY_ALIAS="release"
+            keytool -genkeypair -v \
+              -keystore android/keystores/release.keystore \
+              -alias "$KEY_ALIAS" \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass "$STORE_PASS" -keypass "$KEY_PASS" \
+              -dname "CN=NextDNS Logs Manager, OU=IT, O=NextDNS, L=City, ST=State, C=US"
+          fi
           cat > credentials.json << EOF
           {
             "android": {
               "keystore": {
                 "keystorePath": "android/keystores/release.keystore",
-                "keystorePassword": "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}",
-                "keyAlias": "${{ secrets.ANDROID_KEY_ALIAS }}",
-                "keyPassword": "${{ secrets.ANDROID_KEY_PASSWORD }}"
+                "keystorePassword": "$STORE_PASS",
+                "keyAlias": "$KEY_ALIAS",
+                "keyPassword": "$KEY_PASS"
               }
             }
           }
