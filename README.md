@@ -77,7 +77,7 @@ npm run export:web
 # publica a pasta dist em qualquer static hosting
 ```
 
-Nativo (EAS Build):
+Android (EAS Build):
 1. Login:
 ```bash
 npx expo login
@@ -86,29 +86,29 @@ npx expo login
 ```bash
 npm run eas:init
 ```
-3. Android (produção):
+3. Android (produção AAB):
 ```bash
 npm run build:android
 ```
-4. iOS (produção):
+4. Android (APK):
 ```bash
-npm run build:ios
+npm run build:android:apk
 ```
-5. Enviar para lojas:
+5. Enviar para Play Store:
 ```bash
 npm run submit:android
-npm run submit:ios
 ```
 
 EAS perfis estão em `eas.json`:
 - development: developmentClient, distribuição interna
 - preview: distribuição interna
 - production: autoIncrement
+- apk: buildType APK (distribuição interna)
 
 ## CI/CD (GitHub Actions)
 
 Workflow principal: `.github/workflows/eas-build.yml`
-- Builds EAS (Android/iOS) no push para `main`.
+- Build EAS (Android APK) no push para `main`.
 - Exporta web e **publica automaticamente em GitHub Pages**.
 - Exporta web e **deploy em Vercel**.
 
