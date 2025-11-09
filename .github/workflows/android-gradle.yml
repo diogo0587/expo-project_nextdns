@@ -116,17 +116,24 @@ jobs:
           cd android
           if [ "${SIGNING_MODE}" = "release" ]; then
             ./gradlew :app:assembleRelease
+            echo "Listing release APKs..."
+            ls -al app/build/outputs/apk/release || true
             ARTIFACT=$(find app/build/outputs/apk/release -type f -name "*.apk" -print -quit)
           else
             ./gradlew :app:assembleDebug
+            echo "Listing debug APKs..."
+            ls -al app/build/outputs/apk/debug || true
             ARTIFACT=$(find app/build/outputs/apk/debug -type f -name "*.apk" -print -quit)
           fi
           if [ -z "$ARTIFACT" ]; then
-            echo "APK artifact not found"; exit 1;
+            echo "APK artifact not found"; ls -al app/build/outputs/apk || true; exit 1;
           fi
-          echo "ANDROID_ARTIFACT_PATH=$ARTIFACT" >> $GITHUB_ENV
+          ABSPATH=$(realpath "$ARTIFACT")
+          echo "Resolved APK absolute path: $ABSPATH"
+          echo "ANDROID_ARTIFACT_PATH=$ABSPATH" >> $GITHUB_ENV
 
       - name: Upload APK artifact
+        if: env.ANDROID_ARTIFACT_PATH != ''
         uses: actions/upload-artifact@v4
         with:
           name: android-apk-gradle
