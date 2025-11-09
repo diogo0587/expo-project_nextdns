@@ -108,15 +108,22 @@ EAS perfis estão em `eas.json`:
 ## CI/CD (GitHub Actions)
 
 Workflow principal: `.github/workflows/eas-build.yml`
-- Build EAS (Android APK) no push para `main`.
-- Exporta web e **publica automaticamente em GitHub Pages**.
-- Exporta web e **deploy em Vercel**.
+- Dispara somente em MERGE de Pull Request para `main` (e manual via “Run workflow”).
+- Build EAS (Android APK) após o merge.
+- Exporta web e **publica automaticamente em GitHub Pages** após o merge.
+- Exporta web e **deploy em Vercel** após o merge.
 
 Secrets necessários (GitHub → Settings → Secrets and variables → Actions):
 - `EXPO_TOKEN`: token da sua conta Expo (para builds EAS).
 - `VERCEL_TOKEN`: token de acesso do Vercel.
 - `VERCEL_ORG_ID`: ID da organização no Vercel.
 - `VERCEL_PROJECT_ID`: ID do projeto no Vercel.
+
+Política: “Sempre faça merge na main”
+- Proteja o branch `main` em Settings → Branches → Branch protection rules:
+  - Exigir Pull Request para alterações no `main`.
+  - Bloquear pushes diretos ao `main`.
+  - (Opcional) Exigir aprovação de revisão e checagens de status dos jobs de Actions.
 
 GitHub Pages:
 - O workflow já inclui `upload-pages-artifact` e `deploy-pages`.
