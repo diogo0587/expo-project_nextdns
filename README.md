@@ -121,6 +121,13 @@ Secrets necessários (GitHub → Settings → Secrets and variables → Actions)
 - `VERCEL_ORG_ID`: ID da organização no Vercel.
 - `VERCEL_PROJECT_ID`: ID do projeto no Vercel.
 
+Android signing (obrigatório para build em CI, não-interativo):
+- `ANDROID_KEYSTORE_BASE64`: conteúdo do seu keystore, em Base64.
+- `ANDROID_KEYSTORE_PASSWORD`: senha do keystore.
+- `ANDROID_KEY_ALIAS`: alias da chave.
+- `ANDROID_KEY_PASSWORD`: senha da chave.
+  - Dica: para gerar o Base64 do keystore: `base64 -w 0 release.keystore > keystore.b64`
+
 Política: “Sempre faça merge na main”
 - Proteja o branch `main` em Settings → Branches → Branch protection rules:
   - Exigir Pull Request para alterações no `main`.
