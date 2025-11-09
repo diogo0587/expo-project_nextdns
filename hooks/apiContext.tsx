@@ -1,9 +1,21 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { saveConfig, loadConfig, clearConfig } from './storage';
 
+type Profile = {
+  id: string;
+  name?: string;
+};
+
 type ApiConfig = {
   nextdnsApiKey: string;
+  // Backwards-compatible single profile id
   nextdnsProfileId: string;
+  // Multi-profile support
+  profiles: Profile[];
+  currentProfileId: string;
+  // Timezone for queries
+  timeZone: string;
+  // Gemini
   geminiApiKey: string;
   geminiModel: string;
 };
@@ -17,6 +29,9 @@ type ApiContextValue = {
 const defaultConfig: ApiConfig = {
   nextdnsApiKey: '',
   nextdnsProfileId: '',
+  profiles: [],
+  currentProfileId: '',
+  timeZone: 'UTC',
   geminiApiKey: '',
   geminiModel: 'gemini-1.5-flash-latest',
 };
@@ -41,6 +56,10 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
   const setConfig = (partial: Partial<ApiConfig>) =>
     setConfigState((prev) => {
       const next = { ...prev, ...partial };
+      // If next.currentProfileId is empty but next.profiles has entries, default to first
+      if (!next.currentProfileId && next.profiles?.length) {
+        next.currentProfileId = next.profiles[0].id;
+      }
       // persist
       saveConfig(next);
       return next;

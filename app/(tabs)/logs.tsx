@@ -8,10 +8,13 @@ import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import { useApiConfig } from '@/hooks/apiContext';
+import StatsBar from '@/components/StatsBar';
 
 export default function LogsScreen() {
   const { fetchLogs } = useNextDNS();
   const { summarizeText } = useGemini();
+  const { config, setConfig } = useApiConfig();
   const colorScheme = useColorScheme();
   const [query, setQuery] = useState('');
   const [from, setFrom] = useState('');
@@ -19,6 +22,7 @@ export default function LogsScreen() {
   const [action, setAction] = useState('');
   const [client, setClient] = useState('');
   const [limit, setLimit] = useState('50');
+  const [timeZone, setTimeZone] = useState(config.timeZone);
 
   const [loading, setLoading] = useState(false);
   const [logs, setLogs] = useState<NextDNSLog[]>([]);
@@ -31,6 +35,8 @@ export default function LogsScreen() {
     setLoading(true);
     setError(null);
     try {
+      // persist tz for future calls
+      if (timeZone && timeZone !== config.timeZone) setConfig({ timeZone });
       const qParts = [];
       if (query) qParts.push(query);
       if (action) qParts.push(`action:${action}`);
@@ -41,6 +47,7 @@ export default function LogsScreen() {
         to: to || undefined,
         limit: Number(limit) || 50,
         sort: 'desc',
+        tz: timeZone || undefined,
       });
       setLogs(res.data ?? []);
     } catch (e: any) {
@@ -114,9 +121,58 @@ export default function LogsScreen() {
     }
   };
 
+  const selectProfile = (id: string) => {
+    setConfig({ currentProfileId: id });
+    // refresh with selected profile
+    load();
+  };
+
+  // Stats
+  const stats = useMemo(() => {
+    const domainCounts: Record<string, number> = {};
+    const clientCounts: Record<string, number> = {};
+    const actionCounts: Record<string, number> = {};
+    logs.forEach((l) => {
+      domainCounts[l.domain] = (domainCounts[l.domain] || 0) + 1;
+      if (l.client) clientCounts[l.client] = (clientCounts[l.client] || 0) + 1;
+      if (l.action) actionCounts[l.action] = (actionCounts[l.action] || 0) + 1;
+    });
+    const topN = (obj: Record<string, number>, n = 5) =>
+      Object.entries(obj)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, n);
+    const topDomains = topN(domainCounts);
+    const topClients = topN(clientCounts);
+    const topActions = topN(actionCounts);
+    return {
+      topDomains,
+      topClients,
+      topActions,
+      maxDomain: topDomains[0]?.[1] ?? 0,
+      maxClient: topClients[0]?.[1] ?? 0,
+      maxAction: topActions[0]?.[1] ?? 0,
+    };
+  }, [logs]);
+
   return (
     <ParallaxLike>
       <ThemedView style={styles.filters}>
+        <ThemedText type="subtitle">Profile & Timezone</ThemedText>
+        <View style={styles.row}>
+          <FlatProfiles
+            profiles={config.profiles}
+            currentId={config.currentProfileId || config.nextdnsProfileId}
+            onSelect={selectProfile}
+          />
+          <TextInput
+            placeholder="Timezone (e.g., UTC, America/Sao_Paulo)"
+            placeholderTextColor="#888"
+            value={timeZone}
+            onChangeText={setTimeZone}
+            style={[styles.input, { borderColor: tint, color: Colors[colorScheme ?? 'dark'].text }]}
+          />
+        </View>
+
         <ThemedText type="subtitle">Filters</ThemedText>
         <View style={styles.row}>
           <TextInput
@@ -188,6 +244,19 @@ export default function LogsScreen() {
         </ThemedView>
       )}
 
+      <ThemedView style={{ marginVertical: 8 }}>
+        <ThemedText type="subtitle">Statistics</ThemedText>
+        {stats.topActions.map(([label, count]) => (
+          <StatsBar key={'a-' + label} label={`Action: ${label}`} value={count} max={stats.maxAction} />
+        ))}
+        {stats.topDomains.map(([label, count]) => (
+          <StatsBar key={'d-' + label} label={label} value={count} max={stats.maxDomain} />
+        ))}
+        {stats.topClients.map(([label, count]) => (
+          <StatsBar key={'c-' + label} label={`Client: ${label}`} value={count} max={stats.maxClient} />
+        ))}
+      </ThemedView>
+
       <FlatList
         data={logs}
         keyExtractor={(item) => item.id}
@@ -195,6 +264,41 @@ export default function LogsScreen() {
         contentContainerStyle={{ paddingBottom: 80 }}
       />
     </ParallaxLike>
+  );
+}
+
+function FlatProfiles({
+  profiles,
+  currentId,
+  onSelect,
+}: {
+  profiles: { id: string; name?: string }[];
+  currentId?: string;
+  onSelect: (id: string) => void;
+}) {
+  const tint = Colors['dark'].tint;
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, flex: 1 }}>
+      {profiles?.length ? (
+        profiles.map((p) => (
+          <Pressable
+            key={p.id}
+            onPress={() => onSelect(p.id)}
+            style={[
+              styles.button,
+              {
+                borderColor: tint,
+                backgroundColor: p.id === currentId ? '#222' : 'transparent',
+              },
+            ]}
+          >
+            <ThemedText>{p.name || p.id}</ThemedText>
+          </Pressable>
+        ))
+      ) : (
+        <ThemedText style={{ opacity: 0.7 }}>No profiles configured</ThemedText>
+      )}
+    </View>
   );
 }
 

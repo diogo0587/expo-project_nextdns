@@ -21,6 +21,7 @@ type LogsQuery = {
   sort?: 'asc' | 'desc';
   cursor?: string;
   profileIdOverride?: string;
+  tz?: string;
 };
 
 function withAuthHeaders(apiKey: string) {
@@ -32,19 +33,22 @@ function withAuthHeaders(apiKey: string) {
 
 export function useNextDNS() {
   const {
-    config: { nextdnsApiKey, nextdnsProfileId },
+    config: { nextdnsApiKey, nextdnsProfileId, currentProfileId, timeZone },
   } = useApiConfig();
 
   const ensureConfig = useCallback(() => {
-    if (!nextdnsApiKey || !nextdnsProfileId) {
+    if (!nextdnsApiKey || !(currentProfileId || nextdnsProfileId)) {
       throw new Error('Configure NextDNS API key and Profile ID in Settings.');
     }
-  }, [nextdnsApiKey, nextdnsProfileId]);
+  }, [nextdnsApiKey, currentProfileId, nextdnsProfileId]);
+
+  const resolvedProfile = (override?: string) =>
+    override ?? currentProfileId ?? nextdnsProfileId;
 
   const fetchLogs = useCallback(
     async (params: LogsQuery = {}) => {
       ensureConfig();
-      const profile = params.profileIdOverride ?? nextdnsProfileId;
+      const profile = resolvedProfile(params.profileIdOverride);
       const qs = new URLSearchParams();
       if (params.from) qs.append('from', params.from);
       if (params.to) qs.append('to', params.to);
@@ -52,6 +56,8 @@ export function useNextDNS() {
       if (params.limit) qs.append('limit', String(params.limit));
       if (params.sort) qs.append('sort', params.sort);
       if (params.cursor) qs.append('cursor', params.cursor);
+      const tz = params.tz ?? timeZone;
+      if (tz) qs.append('timezone', tz);
       const url = `${BASE_URL}/profiles/${profile}/logs?${qs.toString()}`;
       const res = await fetch(url, {
         headers: withAuthHeaders(nextdnsApiKey),
@@ -62,15 +68,17 @@ export function useNextDNS() {
       }
       return (await res.json()) as { id: string; data: NextDNSLog[]; cursor?: string };
     },
-    [ensureConfig, nextdnsApiKey, nextdnsProfileId]
+    [ensureConfig, nextdnsApiKey, resolvedProfile, timeZone]
   );
 
   const streamLogs = useCallback(
     async (id: string, params: Omit<LogsQuery, 'from' | 'to' | 'sort' | 'limit' | 'cursor'> = {}) => {
       ensureConfig();
-      const profile = params.profileIdOverride ?? nextdnsProfileId;
+      const profile = resolvedProfile(params.profileIdOverride);
       const qs = new URLSearchParams();
       if (params.q) qs.append('q', params.q);
+      const tz = params.tz ?? timeZone;
+      if (tz) qs.append('timezone', tz);
       const url = `${BASE_URL}/profiles/${profile}/logs/stream?id=${encodeURIComponent(id)}&${qs.toString()}`;
       const res = await fetch(url, {
         headers: withAuthHeaders(nextdnsApiKey),
@@ -81,15 +89,17 @@ export function useNextDNS() {
       }
       return (await res.json()) as { data: NextDNSLog[] };
     },
-    [ensureConfig, nextdnsApiKey, nextdnsProfileId]
+    [ensureConfig, nextdnsApiKey, resolvedProfile, timeZone]
   );
 
   const getDownloadUrl = useCallback(
     async (params: { redirect?: 0 | 1 } = { redirect: 0 }) => {
       ensureConfig();
+      const profile = resolvedProfile();
       const qs = new URLSearchParams();
       if (params.redirect !== undefined) qs.append('redirect', String(params.redirect));
-      const url = `${BASE_URL}/profiles/${nextdnsProfileId}/logs/download?${qs.toString()}`;
+      if (timeZone) qs.append('timezone', timeZone);
+      const url = `${BASE_URL}/profiles/${profile}/logs/download?${qs.toString()}`;
       const res = await fetch(url, {
         headers: withAuthHeaders(nextdnsApiKey),
       });
@@ -99,12 +109,13 @@ export function useNextDNS() {
       }
       return (await res.json()) as { url: string };
     },
-    [ensureConfig, nextdnsApiKey, nextdnsProfileId]
+    [ensureConfig, nextdnsApiKey, resolvedProfile, timeZone]
   );
 
   const deleteLogs = useCallback(async () => {
     ensureConfig();
-    const url = `${BASE_URL}/profiles/${nextdnsProfileId}/logs`;
+    const profile = resolvedProfile();
+    const url = `${BASE_URL}/profiles/${profile}/logs`;
     const res = await fetch(url, {
       method: 'DELETE',
       headers: withAuthHeaders(nextdnsApiKey),
@@ -114,7 +125,7 @@ export function useNextDNS() {
       throw new Error(`NextDNS delete error (${res.status}): ${text}`);
     }
     return true;
-  }, [ensureConfig, nextdnsApiKey, nextdnsProfileId]);
+  }, [ensureConfig, nextdnsApiKey, resolvedProfile]);
 
   return {
     fetchLogs,
