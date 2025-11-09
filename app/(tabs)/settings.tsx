@@ -7,7 +7,7 @@ import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
 
 export default function SettingsScreen() {
-  const { config, setConfig } = useApiConfig();
+  const { config, setConfig, resetConfig } = useApiConfig();
   const colorScheme = useColorScheme();
   const tint = Colors[colorScheme ?? 'dark'].tint;
 
@@ -57,14 +57,14 @@ export default function SettingsScreen() {
       />
 
       <Pressable
-        onPress={() => setConfig({})}
+        onPress={resetConfig}
         style={[styles.button, { borderColor: tint, alignSelf: 'flex-start' }]}
       >
-        <ThemedText>Reset</ThemedText>
+        <ThemedText>Reset (Clear SecureStore)</ThemedText>
       </Pressable>
 
       <ThemedText style={{ opacity: 0.7 }}>
-        Keys are kept in memory only for now. Persistent storage can be added later if needed.
+        Keys are securely persisted using Expo SecureStore.
       </ThemedText>
     </ThemedView>
   );

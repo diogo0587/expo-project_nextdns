@@ -6,12 +6,20 @@ import { useNextDNS, NextDNSLog } from '@/hooks/useNextDNS';
 import { useGemini } from '@/hooks/useGemini';
 import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 
 export default function LogsScreen() {
   const { fetchLogs } = useNextDNS();
   const { summarizeText } = useGemini();
   const colorScheme = useColorScheme();
   const [query, setQuery] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [action, setAction] = useState('');
+  const [client, setClient] = useState('');
+  const [limit, setLimit] = useState('50');
+
   const [loading, setLoading] = useState(false);
   const [logs, setLogs] = useState<NextDNSLog[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +31,17 @@ export default function LogsScreen() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetchLogs({ q: query, limit: 50, sort: 'desc' });
+      const qParts = [];
+      if (query) qParts.push(query);
+      if (action) qParts.push(`action:${action}`);
+      if (client) qParts.push(`client:${client}`);
+      const res = await fetchLogs({
+        q: qParts.join(' '),
+        from: from || undefined,
+        to: to || undefined,
+        limit: Number(limit) || 50,
+        sort: 'desc',
+      });
       setLogs(res.data ?? []);
     } catch (e: any) {
       setError(e.message ?? String(e));
@@ -49,11 +67,11 @@ export default function LogsScreen() {
   );
 
   const summaryInput = useMemo(() => {
-    const head = 'Summarize the following NextDNS logs. Identify blocked domains, frequent clients, and any security concerns:\n\n';
+    const head = 'Summarize the following NextDNS logs. Identify blocked domains, frequent clients, and any security concerns:\\n\\n';
     const text = logs
-      .slice(0, 50)
+      .slice(0, 100)
       .map((l) => `${l.time} | ${l.action ?? ''} | ${l.domain} | ${l.client ?? ''}`)
-      .join('\n');
+      .join('\\n');
     return head + text;
   }, [logs]);
 
@@ -71,19 +89,95 @@ export default function LogsScreen() {
     }
   };
 
+  const exportCsv = async () => {
+    try {
+      const header = 'time,action,domain,client,resolved\\n';
+      const rows = logs
+        .map((l) =>
+          [
+            JSON.stringify(l.time ?? ''),
+            JSON.stringify(l.action ?? ''),
+            JSON.stringify(l.domain ?? ''),
+            JSON.stringify(l.client ?? ''),
+            JSON.stringify(l.resolved ?? ''),
+          ].join(',')
+        )
+        .join('\\n');
+      const csv = header + rows;
+      const fileUri = FileSystem.documentDirectory + 'nextdns_logs.csv';
+      await FileSystem.writeAsStringAsync(fileUri, csv, { encoding: FileSystem.EncodingType.UTF8 });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri);
+      }
+    } catch (e: any) {
+      setError(e.message ?? String(e));
+    }
+  };
+
   return (
     <ParallaxLike>
-      <ThemedView style={styles.searchRow}>
-        <TextInput
-          placeholder="Search logs (domain, client...)"
-          placeholderTextColor="#888"
-          value={query}
-          onChangeText={setQuery}
-          style={[styles.input, { borderColor: tint, color: Colors[colorScheme ?? 'dark'].text }]}
-        />
-        <Pressable onPress={load} style={[styles.button, { borderColor: tint }]}>
-          <ThemedText>Search</ThemedText>
-        </Pressable>
+      <ThemedView style={styles.filters}>
+        <ThemedText type="subtitle">Filters</ThemedText>
+        <View style={styles.row}>
+          <TextInput
+            placeholder="Search (domain, client...)"
+            placeholderTextColor="#888"
+            value={query}
+            onChangeText={setQuery}
+            style={[styles.input, { borderColor: tint, color: Colors[colorScheme ?? 'dark'].text }]}
+          />
+          <TextInput
+            placeholder="Action (allowed/blocked/rewrite)"
+            placeholderTextColor="#888"
+            value={action}
+            onChangeText={setAction}
+            style={[styles.input, { borderColor: tint, color: Colors[colorScheme ?? 'dark'].text }]}
+          />
+        </View>
+        <View style={styles.row}>
+          <TextInput
+            placeholder="Client"
+            placeholderTextColor="#888"
+            value={client}
+            onChangeText={setClient}
+            style={[styles.input, { borderColor: tint, color: Colors[colorScheme ?? 'dark'].text }]}
+          />
+          <TextInput
+            placeholder="Limit"
+            placeholderTextColor="#888"
+            keyboardType="numeric"
+            value={limit}
+            onChangeText={setLimit}
+            style={[styles.input, { borderColor: tint, color: Colors[colorScheme ?? 'dark'].text }]}
+          />
+        </View>
+        <View style={styles.row}>
+          <TextInput
+            placeholder="From (ISO, unix, or -6h)"
+            placeholderTextColor="#888"
+            value={from}
+            onChangeText={setFrom}
+            style={[styles.input, { borderColor: tint, color: Colors[colorScheme ?? 'dark'].text }]}
+          />
+          <TextInput
+            placeholder="To (ISO, unix)"
+            placeholderTextColor="#888"
+            value={to}
+            onChangeText={setTo}
+            style={[styles.input, { borderColor: tint, color: Colors[colorScheme ?? 'dark'].text }]}
+          />
+        </View>
+        <View style={styles.row}>
+          <Pressable onPress={load} style={[styles.button, { borderColor: tint }]}>
+            <ThemedText>Apply</ThemedText>
+          </Pressable>
+          <Pressable onPress={exportCsv} style={[styles.button, { borderColor: tint }]}>
+            <ThemedText>Export CSV</ThemedText>
+          </Pressable>
+          <Pressable onPress={onSummarize} style={[styles.button, { borderColor: tint }]}>
+            <ThemedText>Summarize with Gemini</ThemedText>
+          </Pressable>
+        </View>
       </ThemedView>
 
       {loading && <ActivityIndicator style={{ marginVertical: 8 }} />}
@@ -100,13 +194,6 @@ export default function LogsScreen() {
         renderItem={renderItem}
         contentContainerStyle={{ paddingBottom: 80 }}
       />
-
-      <ThemedView style={styles.summaryBox}>
-        <Pressable onPress={onSummarize} style={[styles.button, { borderColor: tint }]}>
-          <ThemedText>Summarize with Gemini</ThemedText>
-        </Pressable>
-        {summary && <ThemedText>{summary}</ThemedText>}
-      </ThemedView>
     </ParallaxLike>
   );
 }
@@ -117,10 +204,14 @@ function ParallaxLike({ children }: { children: React.ReactNode }) {
 }
 
 const styles = StyleSheet.create({
-  searchRow: {
+  row: {
     flexDirection: 'row',
     gap: 8,
     alignItems: 'center',
+    marginBottom: 8,
+  },
+  filters: {
+    gap: 8,
     marginBottom: 8,
   },
   input: {
@@ -151,9 +242,5 @@ const styles = StyleSheet.create({
     padding: 8,
     marginVertical: 8,
     gap: 4,
-  },
-  summaryBox: {
-    gap: 8,
-    marginTop: 12,
   },
 });
