@@ -78,37 +78,35 @@ jobs:
           if [ -n "${ANDROID_KEYSTORE_BASE64}" ] && [ -n "${ANDROID_KEYSTORE_PASSWORD}" ] && [ -n "${ANDROID_KEY_ALIAS}" ] && [ -n "${ANDROID_KEY_PASSWORD}" ]; then
             echo "Using provided signing secrets for release build..."
             echo "${ANDROID_KEYSTORE_BASE64}" | base64 -d > keystores/upload.keystore
-            cat > signing-config.gradle << 'EOF'
-            android {
-              signingConfigs {
-                release {
-                  storeFile file("./keystores/upload.keystore")
-                  storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
-                  keyAlias System.getenv("ANDROID_KEY_ALIAS")
-                  keyPassword System.getenv("ANDROID_KEY_PASSWORD")
-                }
-              }
-              buildTypes {
-                release {
-                  signingConfig signingConfigs.release
-                }
-              }
-            }
-            EOF
+            printf '%s\n' \
+              'android {' \
+              '  signingConfigs {' \
+              '    release {' \
+              '      storeFile file("./keystores/upload.keystore")' \
+              '      storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD")' \
+              '      keyAlias System.getenv("ANDROID_KEY_ALIAS")' \
+              '      keyPassword System.getenv("ANDROID_KEY_PASSWORD")' \
+              '    }' \
+              '  }' \
+              '  buildTypes {' \
+              '    release {' \
+              '      signingConfig signingConfigs.release' \
+              '    }' \
+              '  }' \
+              '}' > signing-config.gradle
             echo "apply from: './signing-config.gradle'" >> build.gradle
             echo "SIGNING_MODE=release" >> $GITHUB_ENV
           else
             echo "No signing secrets found. Release will be signed with DEBUG keystore (internal use)."
-            cat > signing-config.gradle << 'EOF'
-            android {
-              buildTypes {
-                release {
-                  // Sign with debug config for internal builds
-                  signingConfig signingConfigs.debug
-                }
-              }
-            }
-            EOF
+            printf '%s\n' \
+              'android {' \
+              '  buildTypes {' \
+              '    release {' \
+              '      // Sign with debug config for internal builds' \
+              '      signingConfig signingConfigs.debug' \
+              '    }' \
+              '  }' \
+              '}' > signing-config.gradle
             echo "apply from: './signing-config.gradle'" >> build.gradle
             echo "SIGNING_MODE=debug" >> $GITHUB_ENV
           fi
