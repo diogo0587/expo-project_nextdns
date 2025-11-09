@@ -86,7 +86,7 @@ jobs:
           EOF
 
       - name: Persist generated keystore to repo secrets (optional)
-        if: ${{ secrets.GH_TOKEN != '' }}
+        if: ${{ env.GH_TOKEN != '' }}
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
