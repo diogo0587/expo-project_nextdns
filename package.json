@@ -6,17 +6,13 @@
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo start --android",
-    "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
     "eas:init": "eas init --non-interactive || true",
     "build:android:dev": "eas build -p android --profile development",
-    "build:ios:dev": "eas build -p ios --profile development",
     "build:android": "eas build -p android --profile production",
     "build:android:apk": "eas build -p android --profile apk",
-    "build:ios": "eas build -p ios --profile production",
     "submit:android": "eas submit -p android --profile production",
-    "submit:ios": "eas submit -p ios --profile production",
     "export:web": "expo export --platform web"
   },
   "dependencies": {

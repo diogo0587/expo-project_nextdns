@@ -77,7 +77,7 @@ npm run export:web
 # publica a pasta dist em qualquer static hosting
 ```
 
-Nativo (EAS Build):
+Android (EAS Build):
 1. Login:
 ```bash
 npx expo login
@@ -86,31 +86,52 @@ npx expo login
 ```bash
 npm run eas:init
 ```
-3. Android (produção):
+3. Android (produção AAB):
 ```bash
 npm run build:android
 ```
-4. iOS (produção):
+4. Android (APK):
 ```bash
-npm run build:ios
+npm run build:android:apk
 ```
-5. Enviar para lojas:
+5. Enviar para Play Store:
 ```bash
 npm run submit:android
-npm run submit:ios
 ```
 
 EAS perfis estão em `eas.json`:
 - development: developmentClient, distribuição interna
 - preview: distribuição interna
 - production: autoIncrement
+- apk: buildType APK (distribuição interna)
 
 ## CI/CD (GitHub Actions)
 
-Um workflow já está configurado em `.github/workflows/eas-build.yml`:
-- Dispara builds EAS (Android/iOS) ao dar push no branch `main`.
-- Exporta o build web e faz upload como artefato (`web-dist`).
-- Configure o segredo `EXPO_TOKEN` no repositório (Settings → Secrets and variables → Actions).
+Workflow principal: `.github/workflows/eas-build.yml`
+- Dispara somente em MERGE de Pull Request para `main` (e manual via “Run workflow”).
+- Build EAS (Android APK) após o merge.
+- Exporta web e **publica automaticamente em GitHub Pages** após o merge.
+- Exporta web e **deploy em Vercel** após o merge.
+
+Secrets necessários (GitHub → Settings → Secrets and variables → Actions):
+- `EXPO_TOKEN`: token da sua conta Expo (para builds EAS).
+- `VERCEL_TOKEN`: token de acesso do Vercel.
+- `VERCEL_ORG_ID`: ID da organização no Vercel.
+- `VERCEL_PROJECT_ID`: ID do projeto no Vercel.
+
+Política: “Sempre faça merge na main”
+- Proteja o branch `main` em Settings → Branches → Branch protection rules:
+  - Exigir Pull Request para alterações no `main`.
+  - Bloquear pushes diretos ao `main`.
+  - (Opcional) Exigir aprovação de revisão e checagens de status dos jobs de Actions.
+
+GitHub Pages:
+- O workflow já inclui `upload-pages-artifact` e `deploy-pages`.
+- Ative Pages em Settings → Pages → Build and deployment: “GitHub Actions”.
+
+Vercel:
+- O job `Deploy to Vercel` baixa o artefato `web-dist` e roda `vercel deploy --cwd dist --prod`.
+- Configure os secrets acima para que o deploy funcione.
 
 ## Notes
 

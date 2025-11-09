@@ -1,39 +1,22 @@
-name: EAS Build
+name: Build and Deploy (Android APK + Web)
 
 on:
-  push:
+  pull_request:
     branches:
       - main
+    types:
+      - closed
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 jobs:
-  build-android:
-    name: Build Android (EAS)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18
-
-      - name: Setup Expo (install EAS/Expo CLIs and authenticate)
-        uses: expo/expo-github-action@v8
-        with:
-          expo-version: latest
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
-
-      - name: Install deps
-        run: npm install
-
-      - name: Build Android (production AAB)
-        run: eas build --platform android --profile production --non-interactive
-
   build-android-apk:
-    name: Build Android APK (Internal)
+    name: Build Android APK (EAS)
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.merged == true)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repo
@@ -42,48 +25,25 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
 
       - name: Setup Expo (install EAS/Expo CLIs and authenticate)
         uses: expo/expo-github-action@v8
         with:
           expo-version: latest
           eas-version: latest
+          packager: npm
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Install deps
         run: npm install
 
-      - name: Build Android (APK internal)
+      - name: Build Android (APK)
         run: eas build --platform android --profile apk --non-interactive
 
-  build-ios:
-    name: Build iOS (EAS)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18
-
-      - name: Setup Expo (install EAS/Expo CLIs and authenticate)
-        uses: expo/expo-github-action@v8
-        with:
-          expo-version: latest
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
-
-      - name: Install deps
-        run: npm install
-
-      - name: Build iOS (production)
-        run: eas build --platform ios --profile production --non-interactive
-
   export-web:
-    name: Export Web
+    name: Export Web and Publish
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.merged == true)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repo
@@ -92,12 +52,13 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
 
       - name: Setup Expo CLI (authenticate + install expo-cli)
         uses: expo/expo-github-action@v8
         with:
           expo-version: latest
+          packager: npm
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Install deps
@@ -111,3 +72,39 @@ jobs:
         with:
           name: web-dist
           path: dist
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy-gh-pages:
+    name: Deploy GitHub Pages
+    runs-on: ubuntu-latest
+    needs: export-web
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.merged == true)
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  deploy-vercel:
+    name: Deploy to Vercel
+    runs-on: ubuntu-latest
+    needs: export-web
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.merged == true)
+    steps:
+      - name: Download web-dist artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+
+      - name: Install Vercel CLI
+        run: npm i -g vercel
+
+      - name: Deploy to Vercel (prod)
+        run: vercel deploy --cwd dist --prod --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
