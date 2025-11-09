@@ -125,9 +125,12 @@ jobs:
           eas init --id ${{ secrets.EAS_PROJECT_ID }} --non-interactive --force
 
       - name: Build Android (APK)
+        id: build_release
+        continue-on-error: true
         run: eas build --platform android --profile apk --non-interactive --json > build.json
 
-      - name: Download build artifact
+      - name: Download release build artifact
+        if: steps.build_release.outcome == 'success'
         run: |
           mkdir -p build_artifacts
           ID=$(jq -r '.id // empty' build.json)
@@ -140,7 +143,27 @@ jobs:
           if [ -z "$ARTIFACT" ]; then echo "No artifact found"; exit 1; fi
           echo "ANDROID_ARTIFACT_PATH=$ARTIFACT" >> $GITHUB_ENV
 
+      - name: Fallback build (APK Debug)
+        id: build_debug
+        if: steps.build_release.outcome != 'success'
+        run: eas build --platform android --profile apkDebug --non-interactive --json > build.debug.json
+
+      - name: Download debug build artifact
+        if: steps.build_release.outcome != 'success'
+        run: |
+          mkdir -p build_artifacts
+          ID=$(jq -r '.id // empty' build.debug.json)
+          if [ -z "$ID" ]; then
+            echo "Debug Build ID not found in JSON output"; cat build.debug.json; exit 1;
+          fi
+          eas build:download --id "$ID" -p android -o build_artifacts
+          ls -al build_artifacts
+          ARTIFACT=$(find build_artifacts -type f \( -name "*.apk" -o -name "*.aab" \) -print -quit)
+          if [ -z "$ARTIFACT" ]; then echo "No artifact found"; exit 1; fi
+          echo "ANDROID_ARTIFACT_PATH=$ARTIFACT" >> $GITHUB_ENV
+
       - name: Upload APK artifact
+        if: env.ANDROID_ARTIFACT_PATH != ''
         uses: actions/upload-artifact@v4
         with:
           name: android-apk

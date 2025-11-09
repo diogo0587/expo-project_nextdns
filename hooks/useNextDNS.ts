@@ -24,11 +24,33 @@ type LogsQuery = {
   tz?: string;
 };
 
+type ProfileInfo = {
+  id: string;
+  name?: string;
+};
+
+type Rewrite = {
+  id: string;
+  domain: string;
+  answer: string;
+};
+
 function withAuthHeaders(apiKey: string) {
   return {
     Authorization: `Bearer ${apiKey}`,
     'Content-Type': 'application/json',
   };
+}
+
+async function request<T>(url: string, init: RequestInit) {
+  const res = await fetch(url, init);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`NextDNS error (${res.status}): ${text}`);
+  }
+  // Some endpoints may return 204 No Content
+  if (res.status === 204) return undefined as unknown as T;
+  return (await res.json()) as T;
 }
 
 export function useNextDNS() {
@@ -59,14 +81,9 @@ export function useNextDNS() {
       const tz = params.tz ?? timeZone;
       if (tz) qs.append('timezone', tz);
       const url = `${BASE_URL}/profiles/${profile}/logs?${qs.toString()}`;
-      const res = await fetch(url, {
+      return await request<{ id: string; data: NextDNSLog[]; cursor?: string }>(url, {
         headers: withAuthHeaders(nextdnsApiKey),
       });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`NextDNS logs error (${res.status}): ${text}`);
-      }
-      return (await res.json()) as { id: string; data: NextDNSLog[]; cursor?: string };
     },
     [ensureConfig, nextdnsApiKey, resolvedProfile, timeZone]
   );
@@ -80,14 +97,9 @@ export function useNextDNS() {
       const tz = params.tz ?? timeZone;
       if (tz) qs.append('timezone', tz);
       const url = `${BASE_URL}/profiles/${profile}/logs/stream?id=${encodeURIComponent(id)}&${qs.toString()}`;
-      const res = await fetch(url, {
+      return await request<{ data: NextDNSLog[] }>(url, {
         headers: withAuthHeaders(nextdnsApiKey),
       });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`NextDNS stream error (${res.status}): ${text}`);
-      }
-      return (await res.json()) as { data: NextDNSLog[] };
     },
     [ensureConfig, nextdnsApiKey, resolvedProfile, timeZone]
   );
@@ -100,14 +112,9 @@ export function useNextDNS() {
       if (params.redirect !== undefined) qs.append('redirect', String(params.redirect));
       if (timeZone) qs.append('timezone', timeZone);
       const url = `${BASE_URL}/profiles/${profile}/logs/download?${qs.toString()}`;
-      const res = await fetch(url, {
+      return await request<{ url: string }>(url, {
         headers: withAuthHeaders(nextdnsApiKey),
       });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`NextDNS download error (${res.status}): ${text}`);
-      }
-      return (await res.json()) as { url: string };
     },
     [ensureConfig, nextdnsApiKey, resolvedProfile, timeZone]
   );
@@ -116,21 +123,124 @@ export function useNextDNS() {
     ensureConfig();
     const profile = resolvedProfile();
     const url = `${BASE_URL}/profiles/${profile}/logs`;
-    const res = await fetch(url, {
+    await request<void>(url, {
       method: 'DELETE',
       headers: withAuthHeaders(nextdnsApiKey),
     });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`NextDNS delete error (${res.status}): ${text}`);
-    }
     return true;
   }, [ensureConfig, nextdnsApiKey, resolvedProfile]);
+
+  // Profiles
+  const listProfiles = useCallback(async () => {
+    if (!nextdnsApiKey) throw new Error('Configure NextDNS API key in Settings.');
+    const url = `${BASE_URL}/profiles`;
+    return await request<ProfileInfo[]>(url, {
+      headers: withAuthHeaders(nextdnsApiKey),
+    });
+  }, [nextdnsApiKey]);
+
+  const getProfile = useCallback(async (profileId?: string) => {
+    const profile = resolvedProfile(profileId);
+    const url = `${BASE_URL}/profiles/${profile}`;
+    return await request<ProfileInfo>(url, {
+      headers: withAuthHeaders(nextdnsApiKey),
+    });
+  }, [nextdnsApiKey, resolvedProfile]);
+
+  // Allowlist / Denylist
+  const getAllowlist = useCallback(async (profileId?: string) => {
+    const profile = resolvedProfile(profileId);
+    const url = `${BASE_URL}/profiles/${profile}/allowlist`;
+    // Expect either array or { data: [] }
+    const res = await request<any>(url, { headers: withAuthHeaders(nextdnsApiKey) });
+    return Array.isArray(res) ? (res as string[]) : (res?.data as string[] ?? []);
+  }, [nextdnsApiKey, resolvedProfile]);
+
+  const setAllowlist = useCallback(async (domains: string[], profileId?: string) => {
+    const profile = resolvedProfile(profileId);
+    const url = `${BASE_URL}/profiles/${profile}/allowlist`;
+    await request<void>(url, {
+      method: 'PUT',
+      headers: withAuthHeaders(nextdnsApiKey),
+      body: JSON.stringify({ domains }),
+    });
+    return true;
+  }, [nextdnsApiKey, resolvedProfile]);
+
+  const getDenylist = useCallback(async (profileId?: string) => {
+    const profile = resolvedProfile(profileId);
+    const url = `${BASE_URL}/profiles/${profile}/denylist`;
+    const res = await request<any>(url, { headers: withAuthHeaders(nextdnsApiKey) });
+    return Array.isArray(res) ? (res as string[]) : (res?.data as string[] ?? []);
+  }, [nextdnsApiKey, resolvedProfile]);
+
+  const setDenylist = useCallback(async (domains: string[], profileId?: string) => {
+    const profile = resolvedProfile(profileId);
+    const url = `${BASE_URL}/profiles/${profile}/denylist`;
+    await request<void>(url, {
+      method: 'PUT',
+      headers: withAuthHeaders(nextdnsApiKey),
+      body: JSON.stringify({ domains }),
+    });
+    return true;
+  }, [nextdnsApiKey, resolvedProfile]);
+
+  // Rewrites
+  const getRewrites = useCallback(async (profileId?: string) => {
+    const profile = resolvedProfile(profileId);
+    const url = `${BASE_URL}/profiles/${profile}/rewrites`;
+    const res = await request<any>(url, { headers: withAuthHeaders(nextdnsApiKey) });
+    return Array.isArray(res) ? (res as Rewrite[]) : (res?.data as Rewrite[] ?? []);
+  }, [nextdnsApiKey, resolvedProfile]);
+
+  const addRewrite = useCallback(async (domain: string, answer: string, profileId?: string) => {
+    const profile = resolvedProfile(profileId);
+    const url = `${BASE_URL}/profiles/${profile}/rewrites`;
+    return await request<Rewrite>(url, {
+      method: 'POST',
+      headers: withAuthHeaders(nextdnsApiKey),
+      body: JSON.stringify({ domain, answer }),
+    });
+  }, [nextdnsApiKey, resolvedProfile]);
+
+  const removeRewrite = useCallback(async (id: string, profileId?: string) => {
+    const profile = resolvedProfile(profileId);
+    const url = `${BASE_URL}/profiles/${profile}/rewrites/${encodeURIComponent(id)}`;
+    await request<void>(url, {
+      method: 'DELETE',
+      headers: withAuthHeaders(nextdnsApiKey),
+    });
+    return true;
+  }, [nextdnsApiKey, resolvedProfile]);
+
+  // Advanced settings patch (generic)
+  const patchSettings = useCallback(async (segment: string, body: any, profileId?: string) => {
+    const profile = resolvedProfile(profileId);
+    const seg = segment?.replace(/^\\/+|\\/+$/g, ''); // trim slashes
+    const url = `${BASE_URL}/profiles/${profile}/${seg || 'settings'}`;
+    await request<void>(url, {
+      method: 'PATCH',
+      headers: withAuthHeaders(nextdnsApiKey),
+      body: JSON.stringify(body ?? {}),
+    });
+    return true;
+  }, [nextdnsApiKey, resolvedProfile]);
 
   return {
     fetchLogs,
     streamLogs,
     getDownloadUrl,
     deleteLogs,
+    // new:
+    listProfiles,
+    getProfile,
+    getAllowlist,
+    setAllowlist,
+    getDenylist,
+    setDenylist,
+    getRewrites,
+    addRewrite,
+    removeRewrite,
+    patchSettings,
   };
 }
