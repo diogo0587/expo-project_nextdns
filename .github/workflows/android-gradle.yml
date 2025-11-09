@@ -1,0 +1,135 @@
+name: Android Gradle Build (No EAS)
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
+  workflow_dispatch:
+
+jobs:
+  android-gradle:
+    name: Build Android APK with Gradle
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.merged == true)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Setup Java (JDK 17)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install Android SDK (API 35, Build-Tools 35.0.0, NDK 27.1.12297006, CMake 3.22.1)
+        run: |
+          sudo apt-get update && sudo apt-get install -y wget unzip
+          ANDROID_HOME="${HOME}/android-sdk"
+          ANDROID_SDK_ROOT="${ANDROID_HOME}"
+          echo "Setting ANDROID_HOME and ANDROID_SDK_ROOT to ${ANDROID_HOME}"
+          mkdir -p "${ANDROID_HOME}"
+          echo "Downloading cmdline-tools..."
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O cmdline-tools.zip
+          mkdir -p "${ANDROID_HOME}/cmdline-tools"
+          unzip -q cmdline-tools.zip -d "${ANDROID_HOME}/cmdline-tools"
+          mv "${ANDROID_HOME}/cmdline-tools/cmdline-tools" "${ANDROID_HOME}/cmdline-tools/latest"
+          export ANDROID_HOME ANDROID_SDK_ROOT
+          export PATH="${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:${PATH}"
+          yes | sdkmanager --licenses
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;27.1.12297006" "cmake;3.22.1"
+
+          echo "ANDROID_HOME=${ANDROID_HOME}" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}" >> $GITHUB_ENV
+          echo "PATH=${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:${PATH}" >> $GITHUB_ENV
+
+      - name: Install Expo CLI
+        run: npm i -g expo-cli
+
+      - name: Install deps
+        run: npm install
+
+      - name: Prebuild Android (generate native project)
+        run: |
+          npx expo prebuild -p android --non-interactive --clean
+          # Ensure local.properties points to the installed SDK
+          echo "sdk.dir=${{ env.ANDROID_SDK_ROOT }}" > android/local.properties
+
+      - name: Install updated native deps
+        run: npm install
+
+      - name: Prepare signing (use secrets or debug fallback)
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          cd android/app
+          mkdir -p keystores
+          if [ -n "${ANDROID_KEYSTORE_BASE64}" ] && [ -n "${ANDROID_KEYSTORE_PASSWORD}" ] && [ -n "${ANDROID_KEY_ALIAS}" ] && [ -n "${ANDROID_KEY_PASSWORD}" ]; then
+            echo "Using provided signing secrets for release build..."
+            echo "${ANDROID_KEYSTORE_BASE64}" | base64 -d > keystores/upload.keystore
+            cat > signing-config.gradle << 'EOF'
+            android {
+              signingConfigs {
+                release {
+                  storeFile file("./keystores/upload.keystore")
+                  storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                  keyAlias System.getenv("ANDROID_KEY_ALIAS")
+                  keyPassword System.getenv("ANDROID_KEY_PASSWORD")
+                }
+              }
+              buildTypes {
+                release {
+                  signingConfig signingConfigs.release
+                }
+              }
+            }
+            EOF
+            echo "apply from: './signing-config.gradle'" >> build.gradle
+            echo "SIGNING_MODE=release" >> $GITHUB_ENV
+          else
+            echo "No signing secrets found. Release will be signed with DEBUG keystore (internal use)."
+            cat > signing-config.gradle << 'EOF'
+            android {
+              buildTypes {
+                release {
+                  // Sign with debug config for internal builds
+                  signingConfig signingConfigs.debug
+                }
+              }
+            }
+            EOF
+            echo "apply from: './signing-config.gradle'" >> build.gradle
+            echo "SIGNING_MODE=debug" >> $GITHUB_ENV
+          fi
+
+      - name: Build APK (Gradle)
+        run: |
+          cd android
+          if [ "${SIGNING_MODE}" = "release" ]; then
+            ./gradlew :app:assembleRelease
+            ARTIFACT=$(find app/build/outputs/apk/release -type f -name "*.apk" -print -quit)
+          else
+            ./gradlew :app:assembleDebug
+            ARTIFACT=$(find app/build/outputs/apk/debug -type f -name "*.apk" -print -quit)
+          fi
+          if [ -z "$ARTIFACT" ]; then
+            echo "APK artifact not found"; exit 1;
+          fi
+          echo "ANDROID_ARTIFACT_PATH=$ARTIFACT" >> $GITHUB_ENV
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk-gradle
+          path: ${{ env.ANDROID_ARTIFACT_PATH }}
