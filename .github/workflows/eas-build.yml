@@ -18,6 +18,8 @@ jobs:
     name: Build Android APK (EAS)
     if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.merged == true)
     runs-on: ubuntu-latest
+    env:
+      EAS_ENVIRONMENT: production
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
@@ -26,6 +28,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'
 
       - name: Setup Expo (install EAS/Expo CLIs and authenticate)
         uses: expo/expo-github-action@v8
@@ -34,9 +37,14 @@ jobs:
           eas-version: latest
           packager: npm
           token: ${{ secrets.EXPO_TOKEN }}
+          expo-cache: true
+          eas-cache: true
 
       - name: Install deps
         run: npm install
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
 
       - name: Set up Android signing credentials (local, auto-fallback)
         run: |
@@ -62,6 +70,7 @@ jobs:
               -keyalg RSA -keysize 2048 -validity 10000 \
               -storepass "$STORE_PASS" -keypass "$KEY_PASS" \
               -dname "CN=NextDNS Logs Manager, OU=IT, O=NextDNS, L=City, ST=State, C=US"
+            touch android/keystores/.generated_ephemeral
           fi
           cat > credentials.json << EOF
           {
@@ -76,6 +85,37 @@ jobs:
           }
           EOF
 
+      - name: Persist generated keystore to repo secrets (optional)
+        if: ${{ secrets.GH_TOKEN != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          if [ -f android/keystores/.generated_ephemeral ]; then
+            echo "Persisting generated keystore into repository secrets (requires GH_TOKEN)..."
+            # Ensure gh CLI is available
+            if ! command -v gh >/dev/null 2>&1; then
+              type -p curl >/dev/null || sudo apt-get install -y curl
+              curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+              sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+              echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+              sudo apt-get update && sudo apt-get install -y gh
+            fi
+            # Prepare files without printing secrets to logs
+            base64 -w 0 android/keystores/release.keystore > keystore.b64
+            printf "%s" "$STORE_PASS" > storepass.txt
+            printf "%s" "$KEY_ALIAS" > keyalias.txt
+            printf "%s" "$KEY_PASS" > keypass.txt
+            # Authenticate and set secrets
+            gh auth login --with-token <<< "$GH_TOKEN"
+            gh secret set ANDROID_KEYSTORE_BASE64 --repo "$GITHUB_REPOSITORY" -f keystore.b64
+            gh secret set ANDROID_KEYSTORE_PASSWORD --repo "$GITHUB_REPOSITORY" -f storepass.txt
+            gh secret set ANDROID_KEY_ALIAS --repo "$GITHUB_REPOSITORY" -f keyalias.txt
+            gh secret set ANDROID_KEY_PASSWORD --repo "$GITHUB_REPOSITORY" -f keypass.txt
+            echo "Keystore secrets persisted."
+          else
+            echo "Ephemeral keystore not generated, skipping persistence."
+          fi
+
       - name: Link EAS project (non-interactive)
         run: |
           if [ -z "${{ secrets.EAS_PROJECT_ID }}" ]; then
@@ -85,7 +125,26 @@ jobs:
           eas init --id ${{ secrets.EAS_PROJECT_ID }} --non-interactive --force
 
       - name: Build Android (APK)
-        run: eas build --platform android --profile apk --non-interactive
+        run: eas build --platform android --profile apk --non-interactive --json > build.json
+
+      - name: Download build artifact
+        run: |
+          mkdir -p build_artifacts
+          ID=$(jq -r '.id // empty' build.json)
+          if [ -z "$ID" ]; then
+            echo "Build ID not found in JSON output"; cat build.json; exit 1;
+          fi
+          eas build:download --id "$ID" -p android -o build_artifacts
+          ls -al build_artifacts
+          ARTIFACT=$(find build_artifacts -type f \( -name "*.apk" -o -name "*.aab" \) -print -quit)
+          if [ -z "$ARTIFACT" ]; then echo "No artifact found"; exit 1; fi
+          echo "ANDROID_ARTIFACT_PATH=$ARTIFACT" >> $GITHUB_ENV
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: ${{ env.ANDROID_ARTIFACT_PATH }}
 
   export-web:
     name: Export Web and Publish
@@ -99,6 +158,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'
 
       - name: Setup Expo CLI (authenticate + install expo-cli)
         uses: expo/expo-github-action@v8
@@ -106,12 +166,19 @@ jobs:
           expo-version: latest
           packager: npm
           token: ${{ secrets.EXPO_TOKEN }}
+          expo-cache: true
 
       - name: Install deps
         run: npm install
 
       - name: Export static web
         run: npx expo export --platform web
+
+      - name: Create CNAME (optional)
+        run: |
+          if [ -n "${{ secrets.GH_PAGES_CNAME }}" ]; then
+            echo "${{ secrets.GH_PAGES_CNAME }}" > dist/CNAME
+          fi
 
       - name: Upload dist artifact
         uses: actions/upload-artifact@v4
